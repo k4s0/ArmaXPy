@@ -5,6 +5,7 @@ import socketserver
 import imp
 import os
 import logging
+import inspect
 
 def extractParameters(stringa):
     if not type(stringa) is str:
@@ -56,23 +57,18 @@ def selIdxs(array,idxs):
     for idx in idxs:
         a.append(array[idx])
     return a
-def sendBack(request,data):
-    response = (str(data)).encode('utf-8') #Encode the string(For sending it back)
-    request.sendall(response) #Send it back
-    LogStuff("varSent",[])
     
 class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
     def handle(self):
+        def sendBack(request,data):
+            response = os.fsencode(str(data)) #Encode the string(For sending it back)
+            request.sendall(response) #Send it back
+            LogStuff("varSent",[])
+            
         parameters = self.request.recv(1024) #Receive data
-        safepar = os.fsdecode(parameters) #Decode the bytestring
+        safepar = (os.fsdecode(parameters)).replace(" ", "") #Decode the bytestring
         returns=extractParameters(safepar) #Extract parameters (Split when & is encountered)
         filePath,funcName = selIdxs(returns,[0,1]) #Return an array composed by element 0 and 1 of returns
-        returns = delIdxs(returns,[0,1]) #Removes element 0-1
-        if len(returns) == 1: #Does returns have a single item?
-            scriptArguments = returns[0] #Select it
-        elif len(returns) > 1:#Does returns have multiple items?
-            scriptArguments = returns #Assign it to scriptArguments(Yeah it's useless,iknow)
-        
         if os.path.isfile(filePath):
             LogStuff("reqReceived",[funcName,filePath]) #Log the path of the script and its function name
             mod = imp.load_source("mainModule", filePath) #Load the module as 'mainModule'
@@ -81,6 +77,12 @@ class ThreadedTCPRequestHandler(socketserver.BaseRequestHandler):
             LogStuff("fileNotExists",[filePath]) #Log the error
             sendBack(self.request,"ArmaXPy: Error: File does not exist") #Send back this string(TBR)
             return #Stop the execution
+        
+        returns = delIdxs(returns,[0,1]) #Removes elements 0-1
+        if len(returns) == 1: #Does returns have a single item?
+            scriptArguments = returns[0] #Select it
+        elif len(returns) > 1:#Does returns have multiple items?
+            scriptArguments = returns #Assign it to scriptArguments
 
         if 'scriptArguments' in locals():#Are there any parameters for the python function?
             command = "global data; data=mainModule.{}(scriptArguments)".format(funcName) #Format the code (With args)
